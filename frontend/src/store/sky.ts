@@ -69,10 +69,123 @@ export const useSkyStore = defineStore('sky', () => {
     selectedStar.value = closest
   }
 
+  const moonPhase = computed(() => {
+    const d = viewDate.value
+    const year = d.getUTCFullYear()
+    const month = d.getUTCMonth() + 1
+    const day = d.getUTCDate()
+    const c = Math.floor(year / 100)
+    const y = year - 19 * Math.floor(year / 19)
+    const k = Math.floor((c - 17) / 25)
+    let i = c - Math.floor(c / 4) - Math.floor((c - k) / 3) + 19 * y + 15
+    i = i - 30 * Math.floor(i / 30)
+    i = i - Math.floor(i / 28) * (1 - Math.floor(i / 28) * Math.floor(29 / (i + 1)) * Math.floor((21 - y) / 11))
+    let j = year + Math.floor(year / 4) + i + 2 - c + Math.floor(c / 4)
+    j = j - 7 * Math.floor(j / 7)
+    const l = i - j
+    const moonMonth = month + Math.floor((l + day - 40) / 44) * 30 + (l + day - 40) % 44
+    const synodicMonth = 29.53059
+    const phase = ((moonMonth % synodicMonth) + synodicMonth) % synodicMonth
+    return phase / synodicMonth
+  })
+
+  const moonIllumination = computed(() => {
+    const p = moonPhase.value
+    return (1 - Math.cos(2 * Math.PI * p)) / 2
+  })
+
+  const moonPhaseName = computed(() => {
+    const p = moonPhase.value
+    if (p < 0.0625 || p >= 0.9375) return '新月'
+    if (p < 0.1875) return '蛾眉月'
+    if (p < 0.3125) return '上弦月'
+    if (p < 0.4375) return '盈凸月'
+    if (p < 0.5625) return '满月'
+    if (p < 0.6875) return '亏凸月'
+    if (p < 0.8125) return '下弦月'
+    return '残月'
+  })
+
+  function seededRandom(seed: number): number {
+    let s = seed
+    s = (s * 16807 + 0) % 2147483647
+    return s / 2147483647
+  }
+
+  const cloudCover = computed(() => {
+    const d = viewDate.value
+    const dateSeed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+    const base = seededRandom(dateSeed)
+    const hourNoise = seededRandom(dateSeed + d.getHours() * 31) * 0.3
+    return Math.min(1, Math.max(0, base * 0.6 + hourNoise))
+  })
+
+  const isNightTime = computed(() => {
+    const hour = viewDate.value.getHours()
+    return hour >= 19 || hour < 6
+  })
+
+  const nightQuality = computed(() => {
+    if (!isNightTime.value) return 0
+    const hour = viewDate.value.getHours()
+    if (hour >= 22 || hour < 2) return 1.0
+    if (hour >= 20 || hour < 4) return 0.8
+    return 0.5
+  })
+
+  const lightPollutionFactor = computed(() => {
+    const lat = Math.abs(latitude.value)
+    const absLat = Math.abs(lat - 39.9)
+    return Math.max(0.3, Math.min(0.95, 0.85 - absLat * 0.005))
+  })
+
+  const clearSkyIndex = computed(() => {
+    const cloudScore = (1 - cloudCover.value) * 40
+    const moonScore = (1 - moonIllumination.value) * 25
+    const nightScore = nightQuality.value * 20
+    const pollutionScore = lightPollutionFactor.value * 15
+    return Math.round(Math.min(100, Math.max(0, cloudScore + moonScore + nightScore + pollutionScore)))
+  })
+
+  const stargazingSuitability = computed<'excellent' | 'good' | 'fair' | 'poor'>(() => {
+    const idx = clearSkyIndex.value
+    if (idx >= 80) return 'excellent'
+    if (idx >= 60) return 'good'
+    if (idx >= 40) return 'fair'
+    return 'poor'
+  })
+
+  const stargazingTips = computed(() => {
+    const tips: string[] = []
+    if (!isNightTime.value) {
+      tips.push('当前为白天，不适合观星')
+      tips.push('建议在日落后1小时开始观测')
+    } else {
+      if (moonIllumination.value > 0.6) {
+        tips.push('月光较亮，影响暗天体观测')
+        tips.push('建议观测明亮的行星和星座')
+      } else if (moonIllumination.value < 0.15) {
+        tips.push('月光微弱，是观测深空天体的好时机')
+      }
+      if (cloudCover.value > 0.6) {
+        tips.push('云层较厚，观测条件不佳')
+      } else if (cloudCover.value < 0.2) {
+        tips.push('天空晴朗，观测条件极佳')
+      }
+      if (clearSkyIndex.value >= 70) {
+        tips.push('建议前往光污染少的郊外观测')
+      }
+    }
+    return tips
+  })
+
   return {
     viewDate, zoom, panX, panY, showLabels, showConstLines, showGrid,
     selectedStar, searchQuery, latitude, localSiderealTime, filteredStars,
     projectStar, starRadius, spectralColor, selectStar,
-    STARS, CONSTELLATIONS
+    STARS, CONSTELLATIONS,
+    moonPhase, moonIllumination, moonPhaseName, cloudCover,
+    isNightTime, nightQuality, lightPollutionFactor,
+    clearSkyIndex, stargazingSuitability, stargazingTips
   }
 })

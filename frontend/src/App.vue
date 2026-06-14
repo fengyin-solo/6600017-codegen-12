@@ -48,6 +48,8 @@
         </label>
       </div>
 
+      <StargazingWeather />
+
       <!-- Star Info -->
       <div v-if="store.selectedStar" class="bg-gray-800 rounded-xl p-3">
         <h3 class="text-amber-400 font-bold">{{ store.selectedStar.name }}</h3>
@@ -83,6 +85,7 @@
 import { ref } from 'vue'
 import { useSkyStore } from './store/sky'
 import StarCanvas from './components/StarCanvas.vue'
+import StargazingWeather from './components/StargazingWeather.vue'
 
 const store = useSkyStore()
 const dateStr = ref(new Date().toISOString().slice(0, 16))
